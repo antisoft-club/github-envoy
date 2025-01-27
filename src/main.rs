@@ -35,12 +35,8 @@ async fn main() {
         .and_then(handle_github_webhook);
     let (tx, rx) = oneshot::channel();
     // Start the server with the warp filter
-    warp::serve(webhook)
-        .run(([127, 0, 0, 1], port)) // Runs the server on localhost:8080
-        .await;
-        
     let (addr, server) = warp::serve(routes)
-    .bind_with_graceful_shutdown(([127, 0, 0, 1], 3030), async {
+    .bind_with_graceful_shutdown(([127, 0, 0, 1], port), async {
          rx.await.ok();
     });
 
