@@ -3,6 +3,7 @@ use std::convert::Infallible;
 use warp::Filter;
 use reqwest::Client;
 use serde_json::json;
+use tokio::sync::oneshot;
 
 static DISCORD_ENV_KEY: &'static str = "DISCORD_WEBHOOK";
 static SVC_PORT_ENV_KEY: &'static str = "PORT";
@@ -32,11 +33,21 @@ async fn main() {
         .and(warp::post())
         .and(warp::body::json()) // Automatically deserializes JSON payload
         .and_then(handle_github_webhook);
-
+    let (tx, rx) = oneshot::channel();
     // Start the server with the warp filter
     warp::serve(webhook)
         .run(([127, 0, 0, 1], port)) // Runs the server on localhost:8080
         .await;
+        
+    let (addr, server) = warp::serve(routes)
+    .bind_with_graceful_shutdown(([127, 0, 0, 1], 3030), async {
+         rx.await.ok();
+    });
+
+    // Spawn the server into a runtime
+    tokio::task::spawn(server);
+    
+    let _ = tx.send(());
 }
 
 // Handler for GitHub webhook
