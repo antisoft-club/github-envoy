@@ -3,7 +3,8 @@ use std::convert::Infallible;
 use warp::Filter;
 use reqwest::Client;
 use serde_json::json;
-use tokio::sync::oneshot;
+use tokio::signal;
+use std::error::Error;
 
 static DISCORD_ENV_KEY: &'static str = "DISCORD_WEBHOOK";
 static SVC_PORT_ENV_KEY: &'static str = "PORT";
@@ -26,24 +27,30 @@ struct Sender {
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), Box<dyn Error>> {
     let port: u16 = load_port();
+
+
+    // println!("Started server on port {:?}", port);
     // Create a warp filter to handle POST requests to "/webhook"
-    let webhook = warp::path("webhook")
+    let routes = warp::path("webhook")
         .and(warp::post())
         .and(warp::body::json()) // Automatically deserializes JSON payload
         .and_then(handle_github_webhook);
-    let (tx, rx) = oneshot::channel();
-    // Start the server with the warp filter
     let (addr, server) = warp::serve(routes)
-    .bind_with_graceful_shutdown(([127, 0, 0, 1], port), async {
-         rx.await.ok();
+    .bind_with_graceful_shutdown(([127, 0, 0, 1], port), async move {
+
+        signal::ctrl_c()
+            .await
+            .expect("failed to listen to shutdown signal");
+        println!("Closing server...");
     });
 
-    // Spawn the server into a runtime
-    tokio::task::spawn(server);
-    
-    let _ = tx.send(());
+    println!("Started server at {:?}", addr);
+
+    server.await;
+
+    Ok(())
 }
 
 // Handler for GitHub webhook
