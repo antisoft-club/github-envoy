@@ -4,7 +4,6 @@ use std::convert::Infallible;
 use warp::Filter;
 use reqwest::Client;
 use serde_json::json;
-use tokio::signal;
 use std::error::Error;
 use signal_hook::consts::signal::SIGTERM;
 use signal_hook::iterator::Signals;
@@ -56,16 +55,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .and(warp::post())
         .and(warp::body::json()) // Automatically deserializes JSON payload
         .and_then(handle_github_webhook);
-    let (addr, server) = warp::serve(routes)
+    let (_addr, server) = warp::serve(routes)
     .bind_with_graceful_shutdown(([127, 0, 0, 1], port), async move {
-
-        signal::ctrl_c()
-            .await
-            .expect("failed to listen to shutdown signal");
-        println!("Closing server...");
+        println!("Started server on port {:?}", port);
     });
-
-    println!("Started server at {:?}", addr);
 
     server.await;
 
@@ -74,13 +67,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
 // Handler for GitHub webhook
 async fn handle_github_webhook(payload: GithubPayload) -> Result<impl warp::Reply, Infallible> {
-
-
     // TODO(mindflayer): Add sha256 payload integrity to validate the request is real:
     // https://docs.github.com/en/webhooks/using-webhooks/validating-webhook-deliveries#testing-the-webhook-payload-validation
 
     // Example logic to send a message to Discord on a push event
     if payload.action == "push" {
+        println!("Received push event");
         let message = format!(
             "New push to repository: {}\nby user: {}",
             payload.repository.full_name,
@@ -119,7 +111,7 @@ fn load_port() -> u16 {
                 Err(_) => panic!("{} not a valid port number, got {}", SVC_PORT_ENV_KEY, val),
             }
         },
-        Err(_) => panic!("Environment variable {} not set", SVC_PORT_ENV_KEY),
+        Err(_) => 8081,
     }
 }
 
