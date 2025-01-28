@@ -1,10 +1,14 @@
 use serde::Deserialize;
+use signal_hook::consts::SIGINT;
 use std::convert::Infallible;
 use warp::Filter;
 use reqwest::Client;
 use serde_json::json;
 use tokio::signal;
 use std::error::Error;
+use signal_hook::consts::signal::SIGTERM;
+use signal_hook::iterator::Signals;
+
 
 static DISCORD_ENV_KEY: &'static str = "DISCORD_WEBHOOK";
 static SVC_PORT_ENV_KEY: &'static str = "PORT";
@@ -26,10 +30,25 @@ struct Sender {
     login: String,
 }
 
+async fn signal_handler() {
+    let mut signals = Signals::new(&[SIGTERM, SIGINT]).unwrap();
+
+    for _sig in signals.forever() {
+
+        println!("Received SIGTERM signal, exiting gracefully");
+
+        std::process::exit(0); // Exit with code 0 on successful termination
+
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let port: u16 = load_port();
 
+    tokio::spawn(async move {
+        signal_handler().await
+    });
 
     // println!("Started server on port {:?}", port);
     // Create a warp filter to handle POST requests to "/webhook"
